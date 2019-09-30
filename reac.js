@@ -2,7 +2,15 @@ function run (render, initialstate) {
     let currentstate = initialstate
     render(currentstate)
     
-    window.requestAnimationFrame(run)
+    
+}
+
+function forever(run){
+    function runner(){
+        run()
+        window.requestAnimationFrame(runner)
+    }
+    
 }
 
 // usage
