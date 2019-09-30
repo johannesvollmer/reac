@@ -1,13 +1,14 @@
 function run (render, initialstate) {
     let currentstate = initialstate
     let currentview = render(initialstate)
-    
+    let realized = {}
+
     forever(() => {
-        const input = ...
+        const input = fetch()
         if (input) {
             const newstate = update()
             if (newstate !== currentstate) {
-                realizeview(currentview, newview)
+                realized = realizeview(currentview, newview)
                 const newview = render(newstate)
 
                 currentview = newview
@@ -28,5 +29,5 @@ function forever(run){
 run(render, { count: 5 })
 
 function render(state){
-    input("button", state.count, { count } => { count: count + 1 })
+    return input("button", state.count, { count } => { count: count + 1 })
 }
