@@ -1,11 +1,9 @@
 function run (render, initialstate) {
     let currentstate = initialstate
-    render(currentstate)
     
     forever(() => {
-        render(currentstate)
+        const newview = render(currentstate)
     })
-
 }
 
 function forever(run){
