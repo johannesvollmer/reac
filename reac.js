@@ -1,17 +1,17 @@
 
 window.reac = {}
 
-window.reac.element = (tag, attributes, listeners) => ({ tag, attributes, listeners })
+window.reac.element = (tag, attributes, listeners, children) => ({ tag, attributes, listeners, children })
 
 window.reac.run = (root, render, initialstate) => {
-
     if (root == null)
         throw "Reac root element is not defined"
 
-    const state = {
-        current: null,
-        emerging: initialstate
-    }
+    if (root.childElementCount != 0)
+        throw "Reac root element is not empty"
+
+    const state = initialstate
+    let stateHasChanged = true
 
     const view = {
         current: null,
@@ -19,11 +19,11 @@ window.reac.run = (root, render, initialstate) => {
     }
     
     repeat(() => {
-        if (state.emerging !== state.current) {
-            view.emerging = render(state.emerging)
+        if (stateHasChanged) {
+            view.emerging = render(state) // TODO should be able to return arrays and strings?
             realize()
 
-            state.current = state.emerging
+            stateHasChanged = false
         }
 
         return true // currently, run forever
@@ -31,7 +31,7 @@ window.reac.run = (root, render, initialstate) => {
 
     function realize(){
         if (view.emerging !== view.current){
-            updateElement(root, {children: [view.current]}, {children: [view.emerging]})
+            updateElement(root, { children: [view.current] }, { children: [view.emerging] })
             view.current = view.emerging
         }
 
@@ -64,6 +64,10 @@ window.reac.run = (root, render, initialstate) => {
                         updateElement(native.children[index], currentChild, newChild)
                         console.log("\tupdating existing child", newChild)
                     }
+
+                    else {
+                        console.log("did not touch", currentChild)
+                    }
                 }
 
                 // remove children at the end
@@ -78,8 +82,10 @@ window.reac.run = (root, render, initialstate) => {
                 for (let updatedName in updated){
                     const newValue = updated[updatedName]
                     
-                    if (newValue !== current[updatedName])
+                    if (newValue !== current[updatedName]){
                         update(updatedName, newValue)
+                        console.log("updated", updatedName, newValue)
+                    }
                 }
 
                 for (let existingName in current){
@@ -110,11 +116,16 @@ window.reac.run = (root, render, initialstate) => {
         }
 
         function createListener(listener){
+            if (listener == null) 
+                return null
+            
             return event => {
-                state.emerging = listener(state.emerging, event)
+                let stateHasJustBeenChanged = true // assume state has been changed for now
                 
-                if (state.emerging === undefined) 
-                    throw "Always return the new state in a listener, and do not modify the state itself"
+                const returned = listener(state, event, () => stateHasJustBeenChanged = false)
+                if (returned !== undefined) state = returned
+
+                stateHasChanged = stateHasChanged || stateHasJustBeenChanged
             }
         }
     }
