@@ -5,14 +5,14 @@ function run (render, initialstate) {
     forever(() => {
         const input = ...
         if (input) {
-        const newstate = update()
-        if (newstate !== currentstate) {
-        realizeview(currentview, newview)
-        const newview = render(newstate)
+            const newstate = update()
+            if (newstate !== currentstate) {
+                realizeview(currentview, newview)
+                const newview = render(newstate)
 
-        currentview = newview
-        currentstate = newstate
-        }
+                currentview = newview
+                currentstate = newstate
+            }
         }
     })
 }
