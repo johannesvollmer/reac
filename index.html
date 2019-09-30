@@ -1,0 +1,44 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Reac Demo</title>
+    <link rel="shortcut icon" href="img/favicon.png"/>
+
+    <link rel="stylesheet" href="css/layout.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+    <meta name="theme-color" content="rgb(255, 53, 154)"/>
+
+    <script type="text/javascript" src="reac.js"></script>
+  </head>
+
+  <body>
+    <main></main>
+
+    <script type="text/javascript">
+        const element = reac.element
+
+        const initialState = {
+            count: 5 
+        }
+
+        function render({ count }){
+            if (count > 10)
+                return element("div", { innerHTML: "stop it please" })
+            
+            else return element(
+                "input", { type: "button", value: count }, 
+                { onclick: increment }
+            )
+        }
+
+        function increment({ count }){
+            console.log("clicked!");
+            return ({ count: count + 1 }) 
+        }
+
+        const container = document.querySelector("main")
+        reac.run(container, render, initialState)
+    </script>
+  </body>
+</html>
