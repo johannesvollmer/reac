@@ -12,7 +12,7 @@
     <script type="text/javascript" src="reac.js"></script>
 
     <style>
-        * { margin: 0; padding: 0; }
+        * { margin: 0; padding: 0; user-select: none;}
 
         .box {
             width: 50px;
@@ -36,7 +36,7 @@
     <main></main>
 
     <script type="text/javascript">
-        const element = reac.element
+        const { div, p } = reac.html
 
         const initialState = {
             draggedBoxIndex: null,
@@ -44,40 +44,39 @@
         }
 
         function render({ boxes, draggedBoxIndex }){
-            const boxElements = boxes.map((box, boxIndex) => element(
-                "div", 
-                { className: "box", style: `transform: translate(${box.x}px, ${box.y}px)` },
+            const boxElements = boxes.map((box, boxIndex) => div(
                 { 
+                    className: "box", 
+                    style: { transform: `translate(${box.x}px, ${box.y}px)` },
                     onmousedown: (state, event) => {
                         event.stopPropagation()
                         state.draggedBoxIndex = boxIndex
                     }
-                }, 
-                []
+                }
             ))
 
-            return element(
-                "div", 
-                {}, 
+            const text = p({ innerHTML: "number of boxes: " + boxes.length })
+
+            return div(
                 { onmousedown: addBox, onmouseup: deselectAll, onmousemove: moveSelectedBox }, 
-                
-                [element("p", { innerHTML: "number of boxes: " + boxes.length }, {}, []), ...boxElements]
+                [text, ...boxElements]
             )
         }
 
         function addBox(state, event){
-            console.log("addbox")
             state.boxes.push({
                 x: event.clientX - 25,
                 y: event.clientY - 25
             })
         }
 
-        function moveSelectedBox(state, event){
+        function moveSelectedBox(state, event, preventUpdate){
             if (state.draggedBoxIndex !== null){
                 state.boxes[state.draggedBoxIndex].x += event.movementX
                 state.boxes[state.draggedBoxIndex].y += event.movementY
             }
+
+            else preventUpdate()
         }
 
         function deselectAll(state, event){

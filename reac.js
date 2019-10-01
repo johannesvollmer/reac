@@ -1,8 +1,15 @@
 
-window.reac = {}
+// setup hollow library object
+window.reac = {
+    element: (tag, attributes, children) => ({ tag, attributes, children }),
+    html: {}
+}
 
-window.reac.element = (tag, attributes, listeners, children) => ({ tag, attributes, listeners, children })
+// define html element shortcut constructor functions
+for (let tag of "nav div a p span input form button label img svg canvas main section h1 h2 h3 h4 h5 h6".split(" "))
+    window.reac.html[tag] = (attributes, children) => window.reac.element(tag, attributes, children)
 
+// add main reac function
 window.reac.run = (root, render, initialstate) => {
     if (root == null)
         throw "Reac root element is not defined"
@@ -29,38 +36,52 @@ window.reac.run = (root, render, initialstate) => {
             
 
     function updateElement(native, currentView, newView){
-        if (currentView === newView) 
-            return
-        
+        // replace object if tag changes
         if (currentView.tag !== newView.tag){
-            const newNative = createElement(newView)
+            const newNative = createNativeElement(newView)
             native.parentNode.replaceChild(newNative, native)
             return
         }
         
-        updateDifference(currentView.attributes, newView.attributes, (name, value) => native[name] = value)
-        updateDifference(currentView.listeners, newView.listeners, (name, value) => native[name] = createListener(value))
-        
+        // enable style comparison
+        compileView(newView)
+
+        // update existing attributes
+        for (let updatedName in newView.attributes){
+            const newValue = newView.attributes[updatedName]
+            if (newValue !== currentView.attributes[updatedName]){ // FIXME this will not compare style objects
+                native[updatedName] = createNativeAttribute(updatedName, newValue)
+                // console.log("updated attribute", updatedName, newValue)
+            }
+        }
+
+        // delete unwanted attributes
+        for (let existingName in currentView.attributes){
+            if (newView.attributes[existingName] == undefined)
+                delete native[name] // TODO make sure this does not throw errors!
+        }
+
         // insert missing, remove unwanted, and update outdated children
-        if (currentView.children !== newView.children){
-            
+        // shortcut: remove all children
+        if (!hasChildren(newView)){
+            if (hasChildren(currentView))   
+                native.innerHTML = ""
+        } 
+
+        // otherwise, handle complex scenarios         
+        else {
             // TODO use something smarter which allows better reusage where children are removed
             for (let index = 0; index < newView.children.length; index++){
                 const newChild = newView.children[index]
                 const currentChild = currentView.children[index]
 
-                if (currentChild === null || currentChild === undefined){
-                    native.appendChild(createElement(newChild))
-                    console.log("\tinserting new", createElement(newChild))
-                }
-
-                else if (!objectEquals(currentChild, newChild)){ // TODO combine recursion of equals&update into a single function?
-                    updateElement(native.children[index], currentChild, newChild)
-                    console.log("\tupdating existing child", currentChild, newChild)
+                if (currentChild == undefined){
+                    native.appendChild(createNativeElement(newChild))
+                    // console.log("\tinserting new child", createNativeElement(newChild))
                 }
 
                 else {
-                    console.log("did not touch", currentChild)
+                    updateElement(native.children[index], currentChild, newChild)
                 }
             }
 
@@ -70,82 +91,55 @@ window.reac.run = (root, render, initialstate) => {
         }
     }
 
-    function updateDifference(current, updated, update){
-        if (current !== updated){
-            for (let updatedName in updated){
-                const newValue = updated[updatedName]
-                
-                if (!objectEquals(newValue, current[updatedName])){
-                    update(updatedName, newValue)
-                    console.log("updated", updatedName, newValue)
-                }
-            }
-
-            for (let existingName in current){
-                if (updated[existingName] == undefined)
-                    update(existingName, undefined)
-            }
+    // converts object attributes to string
+    function compileView(view){
+        // convert style to string to enable attribute comparison
+        if (view.attributes != undefined && typeof view.attributes.style === "object"){ // also checks for undefined
+            view.attributes.style = Object.entries(view.attributes.style)
+                .map(([key, value]) => key + ": " + value).join("; ")
         }
     }
 
-    function createElement(element){
+    /// will only be called on realizing change, not on render
+    function createNativeAttribute(name, attribute){
+        if (attribute == null)
+            return null
+
+        // handle special case: attribute is an event listener
+        else if (name.startsWith("on") && typeof attribute === "function")
+            return event => {
+                let stateHasJustBeenChanged = true // assume change for now
+                
+                const returned = attribute(state, event, () => stateHasJustBeenChanged = false)
+                if (returned !== undefined) state = returned
+    
+                stateHasChanged = stateHasChanged || stateHasJustBeenChanged
+            }
+
+        else return attribute
+    }
+
+    function hasChildren(element){
+        return element.children != undefined && element.children.length !== 0
+    }
+
+    function createNativeElement(element){
+        compileView(element)
+        console.log(`'${element.tag}'`)
+
         const native = element.namespace == null? 
             document.createElement(element.tag) :
             document.createElementNS(element.tag, element.namespace)
 
         if (element.attributes != null)
             for (let attributeName in element.attributes) 
-                native[attributeName] = element.attributes[attributeName]   
-                
-        if (element.listeners != null)
-            for (let eventType in element.listeners) 
-                native[eventType] = createListener(element.listeners[eventType])
+                native[attributeName] = createNativeAttribute(attributeName, element.attributes[attributeName])   
         
-        if (element.children != null)
+        if (hasChildren(element))
             for (let child of element.children)
-                native.appendChild(createElement(child))
+                native.appendChild(createNativeElement(child))
 
         return native
-    }
-
-    function createListener(listener){
-        if (listener == null) 
-            return null
-        
-        return event => {
-            let stateHasJustBeenChanged = true // assume state has been changed for now
-            
-            const returned = listener(state, event, () => stateHasJustBeenChanged = false)
-            if (returned !== undefined) state = returned
-
-            stateHasChanged = stateHasChanged || stateHasJustBeenChanged
-        }
-    }
-
-    function objectEquals(a, b){
-        if (a === b)
-            return true
-
-        if (typeof a !== typeof b)
-            return false // omg
-        
-        if (typeof a === "object"){
-            const propertiesA = Object.getOwnPropertyNames(a)
-            const propertiesB = Object.getOwnPropertyNames(b)
-        
-            if (propertiesA.length != propertiesB.length) 
-                return false
-            
-            for (let index = 0; index < propertiesA.length; index++) {
-                const name = propertiesA[index]
-                if (!objectEquals(a[name], b[name])) 
-                    return false
-            }
-        
-            return true
-        }    
-
-        return false
     }
     
     function repeat(run){
