@@ -9,6 +9,7 @@ window.reac = {
 for (let tag of "nav div a p span input form button label img svg canvas main section h1 h2 h3 h4 h5 h6".split(" "))
     window.reac.html[tag] = (attributes, children) => window.reac.element(tag, attributes, children)
 
+    
 // add main reac function
 window.reac.run = (root, render, initialstate) => {
     if (root == null)

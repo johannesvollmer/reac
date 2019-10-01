@@ -66,7 +66,7 @@
         function render({ boxes, draggedBoxIndex }){
             const boxElements = boxes.map((box, boxIndex) => div({ 
                 className: "box" + (boxIndex === draggedBoxIndex? " dragged" : ""), 
-                style: { transform: `translate(${box.x}px, ${box.y}px) rotate(${box.angle}deg)` },
+                style: { transform: `translate(${box.x}px, ${box.y}px) rotate(${box.angle}deg) scale(${Math.sin(box.angle/200) *0.3 + 0.8})` },
                 onmousedown: (state, event) => {
                     event.stopPropagation()
                     state.draggedBoxIndex = boxIndex
@@ -78,7 +78,7 @@
                 }
             }))
 
-            const text = p({ innerHTML: "Number of boxes: " + boxes.length })
+            const text = p({ innerHTML: "This whole page has about 120 lines of code. Number of boxes: " + boxes.length }, [  ])
 
             return div(
                 { onmousedown: addBox, onmouseup: deselectAll, onmousemove: moveSelectedBox }, 
@@ -91,7 +91,7 @@
             state.boxes.push({
                 x: event.clientX - 25,
                 y: event.clientY - 25,
-                angle: Math.random() * 360
+                angle: Math.random() * 360 - 180
             })
         }
 
