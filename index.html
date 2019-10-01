@@ -12,22 +12,41 @@
     <script type="text/javascript" src="reac.js"></script>
 
     <style>
-        * { margin: 0; padding: 0; user-select: none;}
+        * { 
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
 
         .box {
             width: 50px;
             height: 50px;
-            background-color: #444;
+            background-color: teal;
             position: absolute;
+            border-radius: 4px;
+            transition: background-color 0.1s;
+        }
+
+        .box:hover { 
+            background-color: rgb(0, 168, 168);
+        }
+
+        .dragged.box { 
+            background-color: rgb(0, 194, 194);
         }
 
         main, main > div {
             width: 100vw;
             height: 100vh;
+            background-color: #222;
         }
 
         p {
             position: fixed;
+            top: 20px; left: 20px;
+            color: #ddd;
         }
     </style>
   </head>
@@ -40,22 +59,26 @@
 
         const initialState = {
             draggedBoxIndex: null,
-            boxes: [ {x: 100, y: 100} ]
+            boxes: [ { x: 100, y: 100, angle: 0 } ]
         }
 
-        function render({ boxes, draggedBoxIndex }){
-            const boxElements = boxes.map((box, boxIndex) => div(
-                { 
-                    className: "box", 
-                    style: { transform: `translate(${box.x}px, ${box.y}px)` },
-                    onmousedown: (state, event) => {
-                        event.stopPropagation()
-                        state.draggedBoxIndex = boxIndex
-                    }
-                }
-            ))
 
-            const text = p({ innerHTML: "number of boxes: " + boxes.length })
+        function render({ boxes, draggedBoxIndex }){
+            const boxElements = boxes.map((box, boxIndex) => div({ 
+                className: "box" + (boxIndex === draggedBoxIndex? " dragged" : ""), 
+                style: { transform: `translate(${box.x}px, ${box.y}px) rotate(${box.angle}deg)` },
+                onmousedown: (state, event) => {
+                    event.stopPropagation()
+                    state.draggedBoxIndex = boxIndex
+                },
+                ondblclick: (state, event) => {
+                    event.stopPropagation()
+                    state.boxes.splice(boxIndex, 1)
+                    deselectAll(state)
+                }
+            }))
+
+            const text = p({ innerHTML: "Number of boxes: " + boxes.length })
 
             return div(
                 { onmousedown: addBox, onmouseup: deselectAll, onmousemove: moveSelectedBox }, 
@@ -63,17 +86,21 @@
             )
         }
 
+
         function addBox(state, event){
             state.boxes.push({
                 x: event.clientX - 25,
-                y: event.clientY - 25
+                y: event.clientY - 25,
+                angle: Math.random() * 360
             })
         }
 
         function moveSelectedBox(state, event, preventUpdate){
             if (state.draggedBoxIndex !== null){
-                state.boxes[state.draggedBoxIndex].x += event.movementX
-                state.boxes[state.draggedBoxIndex].y += event.movementY
+                const box = state.boxes[state.draggedBoxIndex]
+                box.angle += Math.max(event.movementX, event.movementY)
+                box.x += event.movementX
+                box.y += event.movementY
             }
 
             else preventUpdate()

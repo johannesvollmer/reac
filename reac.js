@@ -17,14 +17,18 @@ window.reac.run = (root, render, initialstate) => {
     if (root.childElementCount != 0)
         throw "Reac root element is not empty"
 
+    // the mutable state of the app, passed to the event listeners
     const state = initialstate
+
+    // keep track of whether we need to re-render
     let stateHasChanged = true
 
+    // the currently rendered "virtual dom" of this reac runner
     let currentView = null
     
     repeat(() => {
         if (stateHasChanged) {
-            const nextView = render(state) // TODO should be able to return arrays and strings?
+            const nextView = render(state) // TODO should be able to return arrays and strings?   // TODO components would allow truly partial updates
             updateElement(root, { children: [currentView] }, { children: [nextView] })
 
             currentView = nextView
@@ -125,7 +129,6 @@ window.reac.run = (root, render, initialstate) => {
 
     function createNativeElement(element){
         compileView(element)
-        console.log(`'${element.tag}'`)
 
         const native = element.namespace == null? 
             document.createElement(element.tag) :
