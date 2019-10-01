@@ -60,9 +60,9 @@ window.reac.run = (root, render, initialstate) => {
                         console.log("\tinserting new", createElement(newChild))
                     }
 
-                    else if (currentChild !== newChild){
+                    else if (!objectEquals(currentChild, newChild)){
                         updateElement(native.children[index], currentChild, newChild)
-                        console.log("\tupdating existing child", newChild)
+                        console.log("\tupdating existing child", currentChild, newChild)
                     }
 
                     else {
@@ -82,7 +82,7 @@ window.reac.run = (root, render, initialstate) => {
                 for (let updatedName in updated){
                     const newValue = updated[updatedName]
                     
-                    if (newValue !== current[updatedName]){
+                    if (!objectEquals(newValue, current[updatedName])){
                         update(updatedName, newValue)
                         console.log("updated", updatedName, newValue)
                     }
@@ -128,6 +128,36 @@ window.reac.run = (root, render, initialstate) => {
                 stateHasChanged = stateHasChanged || stateHasJustBeenChanged
             }
         }
+    }
+
+    function objectEquals(a, b){
+        if (a === b)
+            return true
+        if (typeof a !== typeof b)
+            return false // omg
+        
+        if (typeof a === "object"){
+            const propertiesA = Object.getOwnPropertyNames(a)
+            const propertiesB = Object.getOwnPropertyNames(b)
+        
+            if (propertiesA.length != propertiesB.length) 
+                return false
+            
+            for (let index = 0; index < propertiesA.length; index++) {
+                const name = propertiesA[index]
+                if (!objectEquals(a[name], b[name])) 
+                    return false
+            }
+        
+            return true
+        }    
+        
+        else if (typeof a == "function"){
+            if (a.toString() == b.toString()) // TODO does this work?
+                return true
+        }
+
+        return false
     }
     
     function repeat(run){
