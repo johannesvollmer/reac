@@ -1,22 +1,67 @@
 
 // setup hollow library object
-window.reac = {
-    element: (tag, attributes, children) => ({ tag, attributes, children }),
-    html: {}
-}
+window.reac = { html: {} };
 
-// define html element shortcut constructor functions
-for (let tag of "nav div a p span input form button label img svg canvas main section h1 h2 h3 h4 h5 h6".split(" "))
-    window.reac.html[tag] = (attributes, children) => window.reac.element(tag, attributes, children)
+(() => {
+    // compute all the redundant data here, because post-recursive alteration seems to be slow
+    function element(tag, attributes, children){
+        if (tag == undefined) throw "Element tag must be defined"
+        if (children == undefined) children = []
+        if (attributes == undefined) attributes = []
+
+        // convert stype object to string, if it is an object
+        if (typeof attributes.style === "object"){ // typeof also checks for undefined
+            let compiledStyle = ""
+            for(let attribute in attributes.style)
+                compiledStyle += attribute + ": " + attributes.style[attribute] + "; "
+
+            attributes.style = compiledStyle
+        }
+
+        // compute a reverse lookup table for children
+        const hashedChildren = new Map()
+        for (let child of children){
+            let elements = hashedChildren.get(child.hash)
+            
+            if (elements == undefined) {
+                elements = []
+                hashedChildren.set(elements)
+            } 
+
+            elements.push(child)
+        }
+
+        // compute our own hash
+        const hash = (hashString(tag) * 31 + hashString(attributes.id)) * 31 + children.length 
+
+        return { 
+            tag, attributes, children, hash, 
+            hashedChildren, native: null // fixed structure allows field optimization
+        } 
+    }
+
+    function hashString(string){
+        if (string == undefined || string.length === 0) return 0
+        else return string.length * 31 + string.charCodeAt(string.length / 2)
+    }
+
+    // export generic element function    
+    window.reac.element = element
+    
+    // export html element shortcut constructor functions
+    for (let tag of "nav div a p span input form button label img svg canvas main section h1 h2 h3 h4 h5 h6".split(" "))
+        window.reac.html[tag] = (attributes, children) => element(tag, attributes, children)
+})()
+
 
     
 // add main reac function
-window.reac.run = (root, render, initialstate) => {
+window.reac.run = (root, render, initialState) => {
     if (root == null)
         throw "Reac root element must be defined"
 
     // the mutable state of the app, updated only inside event listeners
-    const state = initialstate
+    const state = initialState
 
     // keep track of whether we need to re-render
     let stateHasChanged = true
@@ -28,8 +73,6 @@ window.reac.run = (root, render, initialstate) => {
     repeat(() => {
         if (stateHasChanged) {
             const nextView = render(state) // TODO should be able to return arrays and strings?   // TODO components would allow truly partial updates
-            compileView(nextView)
-            
             root = updateElement(root, currentView, nextView)
 
             currentView = nextView
@@ -65,69 +108,43 @@ window.reac.run = (root, render, initialstate) => {
 
         // insert missing, remove unwanted, and update outdated children
         // shortcut: remove all children
-        if (!hasChildren(newView)){
-            if (hasChildren(currentView))   
+        if (newView.children.length == 0){
+            if (currentView.children.length != 0)   
                 native.innerHTML = ""
         }
 
         // otherwise, handle complex scenarios         
         else {
-            // TODO use something smarter which allows better reusage where children are removed
-            for (let index = 0; index < newView.children.length; index++){ // we know children are defined and not empty
+            // TODO maintain child order!!!
+            for (let index = 0; index < newView.children.length; index++){
                 const newChild = newView.children[index]
-                const currentChild = (currentView.children || []) [index]
 
-                if (currentChild == undefined){
-                    native.appendChild(createNativeElement(newChild))
-                    // console.log("\tinserting new child", createNativeElement(newChild))
+                // find the element which was at that child index the last time
+                let predecessor = currentView.children[index]
+
+                // if hash does not match, find a better reusable element by looking up the hashmap
+                if (predecessor == undefined || predecessor.native == null || predecessor.hash != newChild.hash){
+                    const elements = currentView.hashedChildren.get(newChild.hash)
+                    if (elements != undefined) predecessor = elements.pop()
                 }
 
+                // create a predecessor if none has been found, otherwise reuse the old native element 
+                if (predecessor == null || predecessor.native == null){
+                    native.appendChild(createNativeElement(newChild))
+                }
                 else {
-                    updateElement(native.children[index], currentChild, newChild)
+                    updateElement(predecessor.native, predecessor, newChild) 
+                    predecessor.native = null
                 }
             }
 
-            // remove children at the end
-            while(native.childElementCount > newView.children.length)
-                native.removeChild(native.lastChild)
+            // remove all children which have not been reused
+            for(let old in currentView.children)
+                if (old.native != null) native.removeChild(old.native)
         }
 
+        newView.native = native
         return native
-    }
-
-    function compileView(view){
-        // convert style to string to enable attribute comparison
-        if (view.attributes != undefined && typeof view.attributes.style === "object"){ // also checks for undefined
-            view.attributes.style = Object.entries(view.attributes.style)
-                .map(([key, value]) => key + ": " + value).join("; ")
-        }
-
-        // compute content hash
-        view.hash = (view.tag || "?").toString() + (view.children || []).length.toString()
-
-        for (let child of view.children || []){
-            compileView(child)
-
-            if (view.hash.length < 60)
-                view.hash += child.hash
-        }
-        
-        for(let attribute in view.attributes || {}){
-            if (view.hash.length > 70) break
-
-            const value = view.attributes[attribute].toString() || "-"
-            if (!attribute.startsWith("on"))
-                view.hash += attribute.charAt(0) + value.charAt(value.length / 2)
-        }
-
-        if (hasChildren(view)){
-            view.childCache = {}
-            for(let index = 0; index < view.children.length; index++)
-                view.childCache[view.children[index].hash] = index
-        }
-
-        console.log("hashed ", view)
-        return view.hash
     }
 
     /// will only be called on realizing change, not on render
@@ -150,21 +167,18 @@ window.reac.run = (root, render, initialstate) => {
         else return attribute
     }
 
-    function hasChildren(element){
-        return element.children != undefined && element.children.length !== 0
-    }
-
     function createNativeElement(element){
         const native = element.namespace == null? 
             document.createElement(element.tag) :
             document.createElementNS(element.tag, element.namespace)
 
-        for (let attributeName in element.attributes || {}) 
+        for (let attributeName in element.attributes) 
             native[attributeName] = createNativeAttribute(attributeName, element.attributes[attributeName])   
         
-        for (let child of element.children || [])
+        for (let child of element.children)
             native.appendChild(createNativeElement(child))
 
+        element.native = native
         return native
     }
     
