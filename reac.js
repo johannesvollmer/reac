@@ -191,6 +191,12 @@ window.reac.run = (root, render, initialState) => {
     }
 
     function createNativeElement(element){
+        if (typeof element === "string"){
+            const native = document.createTextNode(element)    
+            element.native = native
+            return native
+        }
+
         const native = element.namespace == null? 
             document.createElement(element.tag) :
             document.createElementNS(element.tag, element.namespace)
