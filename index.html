@@ -44,9 +44,34 @@
         }
 
         p {
-            position: fixed;
-            top: 20px; left: 20px;
             color: #ddd;
+        }
+
+        #side-pane {
+            position: fixed;
+            right:0; top:0;
+            height: 100vh;
+            width: 10%;
+            background-color: #000;
+            padding: 8px;
+        }
+
+        #outliner {
+            height: 80vh;
+            overflow: auto;
+        }
+
+        .button:hover {
+            background-color: #444;
+        }
+        .button.dragged {
+            background-color: #555;
+        }
+
+        .button {
+            background-color: #333;
+            margin: 4px;
+            padding: 4px;
         }
     </style>
   </head>
@@ -55,46 +80,64 @@
     <main></main>
 
     <script type="text/javascript">
-        const { main, div, p } = reac.html
+        const { main, div, p, br } = reac.html
 
         const initialState = {
+            idCounter: 0,
             draggedBoxIndex: null,
-            boxes: [ { x: 100, y: 100, angle: 0 } ]
+            boxes: [ ]
         }
 
-        for (let i = 0; i < 5000; i++)
-            initialState.boxes.push({ x: Math.random() * 300 + 300, y: Math.random() * 300 + 300, angle: 0 })
-
+        
 
         function render({ boxes, draggedBoxIndex }){
             const boxElements = boxes.map((box, boxIndex) => div({ 
-                className: "box" + (boxIndex === draggedBoxIndex? " dragged" : ""), 
+                id: "box-" + box.id, 
+                className: "box" + (boxIndex === draggedBoxIndex? " dragged" : ""),
                 style: { transform: `translate(${box.x}px, ${box.y}px) rotate(${box.angle}deg) scale(${Math.sin(box.angle/200) * 0.3 + 0.8})` },
-                onmousedown: (state, event) => {
-                    event.stopPropagation()
-                    state.draggedBoxIndex = boxIndex
-                },
-                ondblclick: (state, event) => {
-                    event.stopPropagation()
-                    state.boxes.splice(boxIndex, 1)
-                    deselectAll(state)
-                }
+                onmousedown: (state, event) => startBoxMove(state, event, boxIndex),
+                ondblclick: (state, event) => removeBox(state, event, boxIndex),
             }))
 
-            const text = p({ innerHTML: "Fun Factor: " + boxes.length }, [ ])
+            const list = div({ id: "side-pane", onmousedown: reac.stopPropagation }, [
+                p({ innerHTML: "Delete all Boxes", onclick: deleteAllBoxes, className: "button" }),
+                p({ innerHTML: "Insert Random Boxes", onclick: insertRandomBoxes, className: "button" }),
+                br(), br(),
+                p({ innerHTML: "Boxes (" + boxes.length + "):" }),
+                div({ id:"outliner" }, boxes.map((box, boxIndex) => 
+                    p({ 
+                        innerHTML: "Box " + box.id, 
+                        className: "button" + (boxIndex == draggedBoxIndex? " dragged" : ""),
+                        onmousedown: (state, event) => startBoxMove(state, event, boxIndex),
+                        ondblclick: (state, event) => removeBox(state, event, boxIndex),
+                    })
+                )),
+            ])
 
             return main(
                 { onmousedown: addBox, onmouseup: deselectAll, onmousemove: moveSelectedBox }, 
-                [ text, ...boxElements ]
+                [ ...boxElements, list ]
             )
         }
 
+
+        function startBoxMove(state, event, index){
+            event.stopPropagation()
+            state.draggedBoxIndex = index
+        }
+
+        function removeBox(state, event, index){
+            event.stopPropagation()
+            state.boxes.splice(index, 1)
+            deselectAll(state)
+        }
 
         function addBox(state, event){
             state.boxes.push({
                 x: event.clientX - 25,
                 y: event.clientY - 25,
-                angle: Math.random() * 360 - 180
+                angle: Math.random() * 360 - 180,
+                id: state.idCounter++
             })
         }
 
@@ -111,6 +154,18 @@
 
         function deselectAll(state, event){
             state.draggedBoxIndex = null
+        }
+
+        function deleteAllBoxes(state, event){
+            event.stopPropagation()
+            deselectAll(state)
+            state.boxes = []
+        }
+
+        function insertRandomBoxes(state, event){
+            event.stopPropagation()
+            for (let i = 0; i < 20; i++)
+                state.boxes.push({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, angle: Math.random()*360-180, id: state.idCounter++ })
         }
 
         const container = document.querySelector("main")

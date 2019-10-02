@@ -1,15 +1,29 @@
 
 // setup hollow library object
-window.reac = { html: {} };
+window.reac = { 
+    html: {},
+    stopPropagation: (state, event, preventUpdate) => { 
+        event.stopPropagation()
+        preventUpdate()
+    } 
+};
 
 (() => {
+    // export generic element function    
+    window.reac.element = createView
+    
+    // export html element shortcut constructor functions
+    for (let tag of "nav div a p span input form button label img svg canvas main section h1 h2 h3 h4 h5 h6 br".split(" "))
+        window.reac.html[tag] = (attributes, children) => createView(tag, attributes, children)
+
+
     // compute all the redundant data here, because post-recursive alteration seems to be slow
-    function element(tag, attributes, children){
+    function createView(tag, attributes, children){
         if (tag == undefined) throw "Element tag must be defined"
         if (children == undefined) children = []
         if (attributes == undefined) attributes = []
 
-        // convert stype object to string, if it is an object
+        // convert stype object to string, if required
         if (typeof attributes.style === "object"){ // typeof also checks for undefined
             let compiledStyle = ""
             for(let attribute in attributes.style)
@@ -22,35 +36,25 @@ window.reac = { html: {} };
         const hashedChildren = new Map()
         for (let child of children){
             let elements = hashedChildren.get(child.hash)
-            
-            if (elements == undefined) {
-                elements = []
-                hashedChildren.set(elements)
-            } 
+            if (elements == undefined) hashedChildren.set(elements = [])
 
+            // add this element to the list of elements with the same hash
             elements.push(child)
         }
 
         // compute our own hash
         const hash = (hashString(tag) * 31 + hashString(attributes.id)) * 31 + children.length 
-
+        
         return { 
             tag, attributes, children, hash, 
-            hashedChildren, native: null // fixed structure allows field optimization
+            hashedChildren, native: undefined // fixed structure allows field optimization
         } 
     }
 
     function hashString(string){
         if (string == undefined || string.length === 0) return 0
-        else return string.length * 31 + string.charCodeAt(string.length / 2)
+        else return string.length * 31 + string.charCodeAt(Math.floor((string.length - 1) / 2)) * 7 + string.charCodeAt(0) * 3 + string.charCodeAt(string.length - 1)
     }
-
-    // export generic element function    
-    window.reac.element = element
-    
-    // export html element shortcut constructor functions
-    for (let tag of "nav div a p span input form button label img svg canvas main section h1 h2 h3 h4 h5 h6".split(" "))
-        window.reac.html[tag] = (attributes, children) => element(tag, attributes, children)
 })()
 
 
@@ -120,15 +124,33 @@ window.reac.run = (root, render, initialState) => {
                 const newChild = newView.children[index]
 
                 // find the element which was at that child index the last time
-                let predecessor = currentView.children[index]
+                let predecessor = null
+
+                const atIndex = currentView.children[index]
+                if (atIndex != undefined && atIndex.hash === newChild.hash)
+                    predecessor = atIndex
+
+                // check neighbours (if something was deleted)
+                if (predecessor == null || predecessor.native == null || predecessor.hash != newChild.hash){
+                    const sibling = currentView.children[index + 1]
+                    if (sibling != undefined && sibling.hash === newChild.hash) // equal hash means equal tag and equal id
+                        predecessor = sibling
+                }
+
+                if (predecessor == null || predecessor.native == null || predecessor.hash != newChild.hash){
+                    const sibling = currentView.children[index - 1]
+                    if (sibling != undefined && sibling.hash === newChild.hash) // equal hash means equal tag and equal id
+                        predecessor = sibling
+                }
 
                 // if hash does not match, find a better reusable element by looking up the hashmap
-                if (predecessor == undefined || predecessor.native == null || predecessor.hash != newChild.hash){
-                    const elements = currentView.hashedChildren.get(newChild.hash)
+                if (predecessor == null || predecessor.native == null || predecessor.hash != newChild.hash){
+                    const elements = currentView.hashedChildren.get(newChild.hash) // equal hash means equal tag and equal id
                     if (elements != undefined) predecessor = elements.pop()
                 }
 
-                // create a predecessor if none has been found, otherwise reuse the old native element 
+                // TODO reuse another element with similar tag?
+                // create a predecessor if no unused native has been found, otherwise reuse the old native element 
                 if (predecessor == null || predecessor.native == null){
                     native.appendChild(createNativeElement(newChild))
                 }
@@ -139,8 +161,9 @@ window.reac.run = (root, render, initialState) => {
             }
 
             // remove all children which have not been reused
-            for(let old in currentView.children)
-                if (old.native != null) native.removeChild(old.native)
+            for(let predecessor of currentView.children)
+                if (predecessor.native != null) 
+                    native.removeChild(predecessor.native)
         }
 
         newView.native = native
