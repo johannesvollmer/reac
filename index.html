@@ -27,15 +27,17 @@
             background-color: teal;
             position: absolute;
             border-radius: 4px;
-            transition: background-color 0.1s;
+            transition: background-color 2s;
         }
 
         .box:hover { 
             background-color: rgb(0, 168, 168);
+            transition: background-color 0.2s;
         }
 
         .dragged.box { 
             background-color: rgb(0, 194, 194);
+            transition: background-color 0.2s;
         }
 
         main {
@@ -48,7 +50,7 @@
             position: fixed;
             right:0; top:0;
             height: 100vh;
-            width: 10%;
+            width: 250px;
             background-color: #000;
             padding: 8px;
         }
@@ -66,7 +68,7 @@
         }
 
         .button {
-            background-color: #333;
+            /*background-color: #333;*/
             margin: 4px;
             padding: 4px;
         }
@@ -77,7 +79,7 @@
     <main></main>
 
     <script type="text/javascript">
-        const { main, div, p, br, span } = reac.html
+        const { main, div, p, br, span, text } = reac.html
 
         const initialState = {
             idCounter: 0,
@@ -96,29 +98,29 @@
                 ondblclick: (state, event) => removeBox(state, event, boxIndex),
             }))
 
-            const list = div({ id: "side-pane", onmousedown: reac.stopPropagation }, [
-                p({ innerHTML: "Delete all Boxes", onclick: deleteAllBoxes, className: "button" }),
-                p({ innerHTML: "Insert Random Boxes", onclick: insertRandomBoxes, className: "button" }),
+            const sidepane = div({ id: "side-pane", onmousedown: reac.stopPropagation }, [
+                p({ onclick: deleteAllBoxes, className: "button" }, [ text("Delete all Boxes") ]),
+                p({ onclick: insertRandomBoxes, className: "button" }, [ text("Insert Random Boxes") ]),
                 br(), br(),
-                p({ innerHTML: "Boxes (" + boxes.length + "):" }),
+                p({}, [text("Boxes (" + boxes.length + "):")]),
                 div({ id:"outliner" }, boxes.map((box, boxIndex) => 
                     div(
-                        { 
+                        {
                             className: "button" + (boxIndex == draggedBoxIndex? " dragged" : ""),
                             onmousedown: (state, event) => startBoxMove(state, event, boxIndex),
                             ondblclick: (state, event) => removeBox(state, event, boxIndex)
-                        }, 
+                        },
                         [
-                            span({ innerHTML: `[${boxIndex}] Box ${box.id} ` }),
-                            span({ innerHTML: ` (${Math.round(box.x)}, ${Math.round(box.y)})`, style: { opacity: 0.5 } })
+                            span({}, [ text(`[${boxIndex}] Box ${box.id} `) ]), 
+                            span({ style: { opacity: 0.5 } }, [ text(` (${Math.round(box.x)}, ${Math.round(box.y)})`) ])
                         ]
                     )
-                )),
+                ))
             ])
 
             return main(
                 { onmousedown: addBox, onmouseup: deselectAll, onmouseleave: deselectAll, onmousemove: moveSelectedBox }, 
-                [ ...boxElements, list ]
+                [ ...boxElements, sidepane ]
             )
         }
 

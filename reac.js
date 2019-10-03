@@ -1,9 +1,15 @@
 
 // setup hollow library object
 window.reac = { 
-    html: {},
-    stopPropagation: (state, event, preventUpdate) => { 
+    html: {  },
+
+    stopPropagation: (_, event, preventUpdate) => { 
         event.stopPropagation()
+        preventUpdate()
+    },
+
+    preventDefault: (_, event, preventUpdate) => { 
+        event.preventDefault()
         preventUpdate()
     } 
 };
@@ -11,19 +17,21 @@ window.reac = {
 (() => {
     // export generic element function    
     window.reac.element = createView
-    
+
     // export html element shortcut constructor functions
     for (let tag of "nav div a p span input form button label img svg canvas main section h1 h2 h3 h4 h5 h6 br".split(" "))
         window.reac.html[tag] = (attributes, children) => createView(tag, attributes, children)
 
+    window.reac.html.text = string => createView("text", { textContent: string })
 
-    // compute all the redundant data here, because post-recursive alteration seems to be slow
+    // compute all the redundant data here, because post-recursive tampering seems to be slow
     function createView(tag, attributes, children){
         if (tag == undefined) throw "Element tag must be defined"
         if (children == undefined) children = []
         if (attributes == undefined) attributes = []
 
         // convert stype object to string, if required
+        // FIXME why is this necesssary? if native.style.backgroundColor = x is possible???
         if (typeof attributes.style === "object"){ // typeof also checks for undefined
             let compiledStyle = ""
             for(let attribute in attributes.style)
@@ -36,18 +44,21 @@ window.reac = {
         const hashedChildren = new Map()
         for (let child of children){
             let elements = hashedChildren.get(child.hash)
-            if (elements == undefined) hashedChildren.set(elements = [])
+            if (elements == undefined) 
+                hashedChildren.set(child.hash, elements = [])
+            
+            else console.log("has collision at", child)
 
             // add this element to the list of elements with the same hash
             elements.push(child)
         }
 
         // compute our own hash
-        const hash = (hashString(tag) * 31 + hashString(attributes.id)) * 31 + children.length 
+        const hash = (hashString(tag) * 31 + hashString(attributes.id)) // * 31 + children.length 
         
         return { 
             tag, attributes, children, hash, 
-            hashedChildren, native: undefined // fixed structure allows field optimization
+            hashedChildren, native: undefined // fixed structure allows jit optimization
         } 
     }
 
@@ -76,7 +87,7 @@ window.reac.run = (root, render, initialState) => {
     
     repeat(() => {
         if (stateHasChanged) {
-            const nextView = render(state) // TODO should be able to return arrays and strings?   // TODO components would allow truly partial updates
+            const nextView = render(state) // TODO should be able to return arrays and strings?   // TODO components would allow truly partial render calls
             root = updateElement(root, currentView, nextView)
 
             currentView = nextView
@@ -106,7 +117,7 @@ window.reac.run = (root, render, initialState) => {
 
         // delete unwanted attributes
         for (let existingName in currentView.attributes){
-            if (newView.attributes[existingName] == undefined)
+            if (newView.attributes[existingName] == undefined) // FIXME
                 delete native[name] // TODO make sure this does not throw errors!
         }
 
@@ -119,39 +130,35 @@ window.reac.run = (root, render, initialState) => {
 
         // otherwise, handle complex scenarios         
         else {
-            // TODO maintain child order!!!
+            // FIXME maintain child order!!!
             for (let index = 0; index < newView.children.length; index++){
                 const newChild = newView.children[index]
+
+                const isViable = child => // equal hash means equal tag and equal id
+                    child != undefined && child.hash === newChild.hash && child.native != null 
 
                 // find the element which was at that child index the last time
                 let predecessor = null
 
-                const atIndex = currentView.children[index]
-                if (atIndex != undefined && atIndex.hash === newChild.hash)
-                    predecessor = atIndex
-
-                // check neighbours (if something was deleted)
-                if (predecessor == null || predecessor.native == null || predecessor.hash != newChild.hash){
-                    const sibling = currentView.children[index + 1]
-                    if (sibling != undefined && sibling.hash === newChild.hash) // equal hash means equal tag and equal id
-                        predecessor = sibling
+                const tryCandidate = getCandidate => {
+                    if (predecessor === null) {
+                        const candidate = getCandidate()
+                        if (isViable(candidate)) predecessor = candidate
+                    }
                 }
 
-                if (predecessor == null || predecessor.native == null || predecessor.hash != newChild.hash){
-                    const sibling = currentView.children[index - 1]
-                    if (sibling != undefined && sibling.hash === newChild.hash) // equal hash means equal tag and equal id
-                        predecessor = sibling
-                }
+                tryCandidate(() => currentView.children[index])
+                tryCandidate(() => currentView.children[index + 1])
+                tryCandidate(() => currentView.children[index - 1])
 
-                // if hash does not match, find a better reusable element by looking up the hashmap
-                if (predecessor == null || predecessor.native == null || predecessor.hash != newChild.hash){
-                    const elements = currentView.hashedChildren.get(newChild.hash) // equal hash means equal tag and equal id
-                    if (elements != undefined) predecessor = elements.pop()
-                }
+                tryCandidate(() => {
+                    const elements = currentView.hashedChildren.get(newChild.hash)
+                    if (elements != undefined) return elements.pop() // equal hash means equal tag and equal id most of the time
+                })
 
                 // TODO reuse another element with similar tag?
                 // create a predecessor if no unused native has been found, otherwise reuse the old native element 
-                if (predecessor == null || predecessor.native == null){
+                if (predecessor == null){
                     native.appendChild(createNativeElement(newChild))
                 }
                 else {
@@ -164,7 +171,14 @@ window.reac.run = (root, render, initialState) => {
             for(let predecessor of currentView.children)
                 if (predecessor.native != null) 
                     native.removeChild(predecessor.native)
+
+            // fix order?
+
         }
+
+
+        if (native.idcolor)
+            native.style.backgroundColor = native.idcolor
 
         newView.native = native
         return native
@@ -191,8 +205,8 @@ window.reac.run = (root, render, initialState) => {
     }
 
     function createNativeElement(element){
-        if (typeof element === "string"){
-            const native = document.createTextNode(element)    
+        if (element.tag === "text"){
+            const native = document.createTextNode(element.attributes.textContent)
             element.native = native
             return native
         }
@@ -206,6 +220,10 @@ window.reac.run = (root, render, initialState) => {
         
         for (let child of element.children)
             native.appendChild(createNativeElement(child))
+
+
+        native.idcolor = `rgb(${Math.random()*100},${Math.random()*100},${Math.random()*100})`
+        native.style.backgroundColor = native.idcolor
 
         element.native = native
         return native
